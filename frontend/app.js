@@ -119,3 +119,36 @@ async function loadTripsTable(page) {
     });
 }
 
+// Pagination controls
+function nextPage() {
+    if (currentPage < totalPages) {
+        currentPage++;
+        loadTripsTable(currentPage);
+    }
+}
+
+function prevPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        loadTripsTable(currentPage);
+    }
+}
+
+// =========================================
+//  Filter Controls
+// =========================================
+function applyFilters() {
+    currentPage = 1;
+    loadTripsTable(1);
+}
+
+function resetFilters() {
+    document.getElementById("filter-borough").value = "";
+    document.getElementById("filter-hour").value = "";
+    document.getElementById("filter-day").value = "";
+    document.getElementById("filter-payment").value = "";
+    document.getElementById("filter-min-fare").value = "";
+    document.getElementById("filter-max-fare").value = "";
+    currentPage = 1;
+    loadTripsTable(1);
+}
