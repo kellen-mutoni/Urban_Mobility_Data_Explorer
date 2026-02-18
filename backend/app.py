@@ -1,3 +1,22 @@
+"""
+Flask Backend API for NYC Taxi Data Explorer
+----------------------------------------------
+Endpoints:
+- GET /api/stats          -> Overall dataset statistics
+- GET /api/trips          -> Paginated trips with filters
+- GET /api/hourly         -> Trip counts & avg fare by hour
+- GET /api/daily          -> Trip counts by day of week
+- GET /api/boroughs       -> Trip stats grouped by borough
+- GET /api/top-zones      -> Top pickup/dropoff zones
+- GET /api/fare-distribution -> Fare amount distribution buckets
+- GET /api/zones/geojson  -> GeoJSON for all taxi zones
+- GET /api/zone-heatmap   -> Pickup counts per zone (for map)
+- GET /api/speed-analysis -> Speed patterns by hour and borough
+- GET /api/payment-analysis -> Payment type breakdown
+- GET /api/weekday-vs-weekend -> Weekday vs weekend comparison
+- GET /api/search         -> Custom bucket search using our custom algorithm
+"""
+
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import os
@@ -154,6 +173,8 @@ def get_trips():
             "total_pages": (total + per_page - 1) // per_page,
         }
     )
+
+
 @app.route("/api/hourly", methods=["GET"])
 def get_hourly():
     """Trip counts and average fare by hour of day."""
@@ -390,3 +411,139 @@ def get_zone_heatmap():
             }
         )
     return jsonify(data)
+
+
+@app.route("/api/speed-analysis", methods=["GET"])
+def get_speed_analysis():
+    """Speed patterns by hour and borough."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT z.borough, t.pickup_hour as hour,
+            AVG(t.speed_mph) as avg_speed,
+            COUNT(*) as trip_count
+        FROM trips t
+        JOIN taxi_zones z ON t.pickup_location_id = z.location_id
+        WHERE z.borough IN ('Manhattan', 'Brooklyn', 'Queens', 'Bronx')
+        GROUP BY z.borough, t.pickup_hour
+        ORDER BY z.borough, t.pickup_hour"""
+    ).fetchall()
+    conn.close()
+
+    data = [dict(r) for r in rows]
+    for d in data:
+        d["avg_speed"] = round(d["avg_speed"], 2)
+    return jsonify(data)
+
+
+@app.route("/api/search", methods=["GET"])
+def search_trips():
+    """
+    Search/filter trips using custom bucket sort for results.
+    Allows searching by zone name and sorting results.
+    """
+    conn = get_db()
+    zone_query = request.args.get("zone", "")
+    sort_by = request.args.get("sort_by", "fare_amount")
+    limit = int(request.args.get("limit", 100))
+
+    valid_sort_fields = [
+        "fare_amount", "trip_distance", "trip_duration_minutes",
+        "speed_mph", "total_amount", "tip_amount"
+    ]
+    if sort_by not in valid_sort_fields:
+        sort_by = "fare_amount"
+
+    query = """
+        SELECT t.trip_id, t.fare_amount, t.trip_distance, t.trip_duration_minutes,
+            t.speed_mph, t.total_amount, t.tip_amount, t.pickup_hour,
+            pz.zone_name as pickup_zone, pz.borough as pickup_borough,
+            dz.zone_name as dropoff_zone, dz.borough as dropoff_borough
+        FROM trips t
+        JOIN taxi_zones pz ON t.pickup_location_id = pz.location_id
+        JOIN taxi_zones dz ON t.dropoff_location_id = dz.location_id
+    """
+    params = []
+
+    if zone_query:
+        query += " WHERE (pz.zone_name LIKE ? OR dz.zone_name LIKE ?)"
+        params.extend([f"%{zone_query}%", f"%{zone_query}%"])
+
+    query += f" LIMIT {limit}"
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    data = [dict(r) for r in rows]
+
+    # Sort using our CUSTOM bucket sort (no built-in sort!)
+    sorted_data = custom_bucket_sort(data, lambda x: x[sort_by], num_buckets=15)
+
+    return jsonify(sorted_data)
+
+
+@app.route("/api/payment-analysis", methods=["GET"])
+def get_payment_analysis():
+    """Payment type breakdown."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT payment_type,
+            COUNT(*) as trip_count,
+            AVG(fare_amount) as avg_fare,
+            AVG(tip_amount) as avg_tip,
+            SUM(total_amount) as total_revenue
+        FROM trips
+        GROUP BY payment_type
+        ORDER BY trip_count DESC"""
+    ).fetchall()
+    conn.close()
+
+    payment_names = {
+        1: "Credit Card",
+        2: "Cash",
+        3: "No Charge",
+        4: "Dispute",
+        5: "Unknown",
+        6: "Voided",
+    }
+
+    data = []
+    for row in rows:
+        pt = row["payment_type"]
+        data.append(
+            {
+                "payment_type": pt,
+                "payment_name": payment_names.get(pt, f"Type {pt}"),
+                "trip_count": row["trip_count"],
+                "avg_fare": round(row["avg_fare"], 2),
+                "avg_tip": round(row["avg_tip"], 2),
+                "total_revenue": round(row["total_revenue"], 2),
+            }
+        )
+    return jsonify(data)
+
+
+@app.route("/api/weekday-vs-weekend", methods=["GET"])
+def weekday_vs_weekend():
+    """Compare weekday vs weekend trip patterns."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT
+            CASE WHEN is_weekend = 1 THEN 'Weekend' ELSE 'Weekday' END as period,
+            COUNT(*) as trip_count,
+            AVG(fare_amount) as avg_fare,
+            AVG(trip_distance) as avg_distance,
+            AVG(trip_duration_minutes) as avg_duration,
+            AVG(speed_mph) as avg_speed,
+            AVG(tip_amount) as avg_tip
+        FROM trips
+        GROUP BY is_weekend"""
+    ).fetchall()
+    conn.close()
+
+    return jsonify([dict(r) for r in rows])
+
+
+if __name__ == "__main__":
+    print("Starting NYC Taxi Data Explorer API...")
+    print("API running at http://localhost:8080")
+    app.run(debug=True, port=8080)
