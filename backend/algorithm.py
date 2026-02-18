@@ -67,3 +67,20 @@ def custom_bucket_sort(data, key_func, num_buckets=10):
             result.append(item)
 
     return result
+
+def custom_insertion_sort(arr, key_func):
+    """
+    Custom Insertion Sort (used inside bucket sort)
+    No built-in sort functions used.
+
+    Time Complexity: O(n^2) worst case, O(n) best case
+    Space Complexity: O(1)
+    """
+    for i in range(1, len(arr)):
+        current = arr[i]
+        current_val = key_func(current)
+        j = i - 1
+        while j >= 0 and key_func(arr[j]) > current_val:
+            arr[j + 1] = arr[j]
+            j -= 1
+        arr[j + 1] = current
