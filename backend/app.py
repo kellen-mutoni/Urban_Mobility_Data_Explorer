@@ -154,4 +154,239 @@ def get_trips():
             "total_pages": (total + per_page - 1) // per_page,
         }
     )
+@app.route("/api/hourly", methods=["GET"])
+def get_hourly():
+    """Trip counts and average fare by hour of day."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT pickup_hour as hour,
+            COUNT(*) as trip_count,
+            AVG(fare_amount) as avg_fare,
+            AVG(trip_duration_minutes) as avg_duration,
+            AVG(speed_mph) as avg_speed,
+            AVG(tip_amount) as avg_tip
+        FROM trips
+        GROUP BY pickup_hour
+        ORDER BY pickup_hour"""
+    ).fetchall()
+    conn.close()
 
+    data = []
+    for row in rows:
+        data.append(
+            {
+                "hour": row["hour"],
+                "trip_count": row["trip_count"],
+                "avg_fare": round(row["avg_fare"], 2),
+                "avg_duration": round(row["avg_duration"], 2),
+                "avg_speed": round(row["avg_speed"], 2),
+                "avg_tip": round(row["avg_tip"], 2),
+            }
+        )
+    return jsonify(data)
+
+
+@app.route("/api/daily", methods=["GET"])
+def get_daily():
+    """Trip counts by day of the week."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT pickup_day_of_week as day,
+            COUNT(*) as trip_count,
+            AVG(fare_amount) as avg_fare,
+            AVG(trip_distance) as avg_distance,
+            SUM(CASE WHEN is_weekend = 1 THEN 1 ELSE 0 END) as weekend_trips
+        FROM trips
+        GROUP BY pickup_day_of_week
+        ORDER BY pickup_day_of_week"""
+    ).fetchall()
+    conn.close()
+
+    day_names = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
+    data = []
+    for row in rows:
+        data.append(
+            {
+                "day": row["day"],
+                "day_name": day_names[row["day"]],
+                "trip_count": row["trip_count"],
+                "avg_fare": round(row["avg_fare"], 2),
+                "avg_distance": round(row["avg_distance"], 2),
+            }
+        )
+    return jsonify(data)
+
+
+@app.route("/api/boroughs", methods=["GET"])
+def get_boroughs():
+    """Trip stats grouped by pickup borough."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT z.borough,
+            COUNT(*) as trip_count,
+            AVG(t.fare_amount) as avg_fare,
+            AVG(t.trip_distance) as avg_distance,
+            AVG(t.trip_duration_minutes) as avg_duration,
+            AVG(t.speed_mph) as avg_speed,
+            AVG(t.tip_amount) as avg_tip,
+            SUM(t.total_amount) as total_revenue
+        FROM trips t
+        JOIN taxi_zones z ON t.pickup_location_id = z.location_id
+        GROUP BY z.borough
+        ORDER BY trip_count DESC"""
+    ).fetchall()
+    conn.close()
+
+    data = []
+    for row in rows:
+        data.append(
+            {
+                "borough": row["borough"],
+                "trip_count": row["trip_count"],
+                "avg_fare": round(row["avg_fare"], 2),
+                "avg_distance": round(row["avg_distance"], 2),
+                "avg_duration": round(row["avg_duration"], 2),
+                "avg_speed": round(row["avg_speed"], 2),
+                "avg_tip": round(row["avg_tip"], 2),
+                "total_revenue": round(row["total_revenue"], 2),
+            }
+        )
+    return jsonify(data)
+
+
+@app.route("/api/top-zones", methods=["GET"])
+def get_top_zones():
+    """Top pickup and dropoff zones."""
+    conn = get_db()
+    limit = int(request.args.get("limit", 15))
+
+    # Top pickup zones
+    pickup_rows = conn.execute(
+        """SELECT z.zone_name, z.borough, COUNT(*) as trip_count
+        FROM trips t
+        JOIN taxi_zones z ON t.pickup_location_id = z.location_id
+        GROUP BY t.pickup_location_id
+        ORDER BY trip_count DESC
+        LIMIT ?""",
+        (limit,),
+    ).fetchall()
+
+    # Top dropoff zones
+    dropoff_rows = conn.execute(
+        """SELECT z.zone_name, z.borough, COUNT(*) as trip_count
+        FROM trips t
+        JOIN taxi_zones z ON t.dropoff_location_id = z.location_id
+        GROUP BY t.dropoff_location_id
+        ORDER BY trip_count DESC
+        LIMIT ?""",
+        (limit,),
+    ).fetchall()
+
+    conn.close()
+
+    return jsonify(
+        {
+            "top_pickup": [dict(r) for r in pickup_rows],
+            "top_dropoff": [dict(r) for r in dropoff_rows],
+        }
+    )
+
+
+@app.route("/api/fare-distribution", methods=["GET"])
+def get_fare_distribution():
+    """Fare amount distribution using SQL aggregation + custom bucket sort for ordering."""
+    conn = get_db()
+
+    # Aggregate fare buckets directly in SQL (much faster than loading 500K rows)
+    rows = conn.execute(
+        """SELECT
+            CAST(fare_amount / 5 AS INT) * 5 as bucket_start,
+            COUNT(*) as count,
+            AVG(fare_amount) as avg_fare
+        FROM trips
+        WHERE fare_amount > 0 AND fare_amount <= 100
+        GROUP BY CAST(fare_amount / 5 AS INT)
+        ORDER BY bucket_start"""
+    ).fetchall()
+    conn.close()
+
+    data = []
+    for row in rows:
+        start = int(row["bucket_start"])
+        data.append({
+            "range": f"${start}-${start + 5}",
+            "count": row["count"],
+            "avg_fare": round(row["avg_fare"], 2),
+            "order": start,
+        })
+
+    # Use our custom bucket sort to order the results (demonstrating the algorithm)
+    sorted_data = custom_bucket_sort(data, lambda x: x["order"], num_buckets=5)
+
+    return jsonify(sorted_data)
+
+
+@app.route("/api/zones/geojson", methods=["GET"])
+def get_zones_geojson():
+    """Get GeoJSON for all taxi zones (for map rendering)."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT g.location_id, g.geometry_json, z.zone_name, z.borough, z.service_zone
+        FROM taxi_zone_geometries g
+        JOIN taxi_zones z ON g.location_id = z.location_id"""
+    ).fetchall()
+
+    features = []
+    for row in rows:
+        feature = {
+            "type": "Feature",
+            "properties": {
+                "location_id": row["location_id"],
+                "zone_name": row["zone_name"],
+                "borough": row["borough"],
+                "service_zone": row["service_zone"],
+            },
+            "geometry": json.loads(row["geometry_json"]),
+        }
+        features.append(feature)
+
+    conn.close()
+    return jsonify({"type": "FeatureCollection", "features": features})
+
+
+@app.route("/api/zone-heatmap", methods=["GET"])
+def get_zone_heatmap():
+    """Pickup counts per zone for heatmap visualization."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT t.pickup_location_id as location_id,
+            z.zone_name, z.borough,
+            COUNT(*) as pickup_count,
+            AVG(t.fare_amount) as avg_fare
+        FROM trips t
+        JOIN taxi_zones z ON t.pickup_location_id = z.location_id
+        GROUP BY t.pickup_location_id
+        ORDER BY pickup_count DESC"""
+    ).fetchall()
+    conn.close()
+
+    data = []
+    for row in rows:
+        data.append(
+            {
+                "location_id": row["location_id"],
+                "zone_name": row["zone_name"],
+                "borough": row["borough"],
+                "pickup_count": row["pickup_count"],
+                "avg_fare": round(row["avg_fare"], 2),
+            }
+        )
+    return jsonify(data)
