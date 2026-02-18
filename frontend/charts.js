@@ -346,3 +346,103 @@ async function loadTopZones() {
         },
     });
 }
+
+// =========================================
+//  Weekday vs Weekend Comparison
+// =========================================
+async function loadWeekdayWeekend() {
+    const data = await fetchAPI("/weekday-vs-weekend");
+    if (!data) return;
+
+    const labels = data.map(d => d.period);
+    const metrics = ["avg_fare", "avg_distance", "avg_duration", "avg_speed"];
+    const metricLabels = ["Avg Fare ($)", "Avg Distance (mi)", "Avg Duration (min)", "Avg Speed (mph)"];
+    const metricColors = [COLORS.yellow, COLORS.blue, COLORS.green, COLORS.red];
+
+    if (weekdayWeekendChart) weekdayWeekendChart.destroy();
+    weekdayWeekendChart = new Chart(document.getElementById("weekdayWeekendChart"), {
+        type: "bar",
+        data: {
+            labels: labels,
+            datasets: metrics.map((m, i) => ({
+                label: metricLabels[i],
+                data: data.map(d => Number(d[m]).toFixed(2)),
+                backgroundColor: metricColors[i],
+                borderRadius: 4,
+            })),
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: "top",
+                    labels: { usePointStyle: true }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: "#1e2e3e" },
+                    beginAtZero: true
+                },
+                x: { grid: { display: false } }
+            },
+        },
+    });
+}
+
+// =========================================
+//  Avg Fare by Hour Chart
+// =========================================
+async function loadFareHourChart() {
+    const data = await fetchAPI("/hourly");
+    if (!data) return;
+
+    const labels = data.map(d => {
+        const h = d.hour;
+        return h === 0 ? "12AM" : h < 12 ? h + "AM" : h === 12 ? "12PM" : (h - 12) + "PM";
+    });
+
+    if (fareHourChart) fareHourChart.destroy();
+    fareHourChart = new Chart(document.getElementById("fareHourChart"), {
+        type: "line",
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: "Avg Fare",
+                    data: data.map(d => d.avg_fare),
+                    borderColor: COLORS.yellow,
+                    backgroundColor: "rgba(247, 201, 72, 0.1)",
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 3,
+                },
+                {
+                    label: "Avg Tip",
+                    data: data.map(d => d.avg_tip),
+                    borderColor: COLORS.green,
+                    backgroundColor: "rgba(69, 179, 105, 0.1)",
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 3,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: "top",
+                    labels: { usePointStyle: true }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: "#1e2e3e" },
+                    title: { display: true, text: "Amount ($)", color: "#8899aa" }
+                },
+                x: { grid: { display: false } }
+            },
+        },
+    });
+}
