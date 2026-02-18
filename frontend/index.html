@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NYC Taxi Data Explorer - Urban Mobility Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Leaflet for map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1>NYC Taxi Data Explorer</h1>
+            <p class="subtitle">Exploring Urban Mobility Patterns in New York City - January 2019</p>
+        </div>
+    </header>
+
+    <!-- Stats Cards -->
+    <section class="stats-section">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-trips">--</div>
+                <div class="stat-label">Total Trips</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-revenue">--</div>
+                <div class="stat-label">Total Revenue</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-avg-fare">--</div>
+                <div class="stat-label">Avg Fare</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-avg-distance">--</div>
+                <div class="stat-label">Avg Distance (mi)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-avg-duration">--</div>
+                <div class="stat-label">Avg Duration (min)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-avg-speed">--</div>
+                <div class="stat-label">Avg Speed (mph)</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Filters -->
+    <section class="filter-section">
+        <h2>Filter & Explore</h2>
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="filter-borough">Borough</label>
+                <select id="filter-borough">
+                    <option value="">All Boroughs</option>
+                    <option value="Manhattan">Manhattan</option>
+                    <option value="Brooklyn">Brooklyn</option>
+                    <option value="Queens">Queens</option>
+                    <option value="Bronx">Bronx</option>
+                    <option value="Staten Island">Staten Island</option>
+                    <option value="EWR">EWR (Newark)</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-hour">Hour of Day</label>
+                <select id="filter-hour">
+                    <option value="">All Hours</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-day">Day of Week</label>
+                <select id="filter-day">
+                    <option value="">All Days</option>
+                    <option value="0">Monday</option>
+                    <option value="1">Tuesday</option>
+                    <option value="2">Wednesday</option>
+                    <option value="3">Thursday</option>
+                    <option value="4">Friday</option>
+                    <option value="5">Saturday</option>
+                    <option value="6">Sunday</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-payment">Payment Type</label>
+                <select id="filter-payment">
+                    <option value="">All Types</option>
+                    <option value="1">Credit Card</option>
+                    <option value="2">Cash</option>
+                    <option value="3">No Charge</option>
+                    <option value="4">Dispute</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-min-fare">Min Fare ($)</label>
+                <input type="number" id="filter-min-fare" placeholder="0" min="0">
+            </div>
+            <div class="filter-group">
+                <label for="filter-max-fare">Max Fare ($)</label>
+                <input type="number" id="filter-max-fare" placeholder="500" min="0">
+            </div>
+            <button class="btn-filter" onclick="applyFilters()">Apply Filters</button>
+            <button class="btn-reset" onclick="resetFilters()">Reset</button>
+        </div>
+    </section>
+
+    <!-- Charts Section -->
+    <section class="charts-section">
+        <!-- Row 1: Hourly pattern + Daily pattern -->
+        <div class="chart-row">
+            <div class="chart-card">
+                <h3>Trip Volume by Hour of Day</h3>
+                <p class="chart-description">When does NYC move the most? Peak hours reveal commuting patterns.</p>
+                <canvas id="hourlyChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Trips by Day of Week</h3>
+                <p class="chart-description">Weekday hustle vs weekend chill.</p>
+                <canvas id="dailyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Row 2: Borough breakdown + Payment types -->
+        <div class="chart-row">
+            <div class="chart-card">
+                <h3>Trips by Borough</h3>
+                <p class="chart-description">Which boroughs generate the most taxi demand?</p>
+                <canvas id="boroughChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Payment Methods</h3>
+                <p class="chart-description">Credit card vs cash - how New Yorkers pay.</p>
+                <canvas id="paymentChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Row 3: Fare distribution + Speed analysis -->
+        <div class="chart-row">
+            <div class="chart-card">
+                <h3>Fare Distribution</h3>
+                <p class="chart-description">How much do typical taxi rides cost? (Sorted using custom bucket sort algorithm)</p>
+                <canvas id="fareChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Average Speed by Hour (Top Boroughs)</h3>
+                <p class="chart-description">Traffic flow throughout the day across boroughs.</p>
+                <canvas id="speedChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Row 4: Top zones -->
+        <div class="chart-row">
+            <div class="chart-card wide">
+                <h3>Top 15 Pickup Zones</h3>
+                <p class="chart-description">The busiest spots in the city for hailing a cab.</p>
+                <canvas id="topPickupChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Row 5: Weekday vs Weekend comparison -->
+        <div class="chart-row">
+            <div class="chart-card">
+                <h3>Weekday vs Weekend</h3>
+                <p class="chart-description">How does riding behavior change on weekends?</p>
+                <canvas id="weekdayWeekendChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Avg Fare by Hour</h3>
+                <p class="chart-description">Do fares change depending on when you ride?</p>
+                <canvas id="fareHourChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- Map Section -->
+    <section class="map-section">
+        <h2>Taxi Zone Heatmap</h2>
+        <p class="chart-description">Darker zones = more pickups. Hover for details.</p>
+        <div id="map"></div>
+    </section>
+
+    <!-- Trip Table -->
+    <section class="table-section">
+        <h2>Trip Records</h2>
+        <div class="table-controls">
+            <span id="table-info">Showing 0 trips</span>
+            <div class="pagination">
+                <button onclick="prevPage()" id="btn-prev" disabled>Previous</button>
+                <span id="page-info">Page 1</span>
+                <button onclick="nextPage()" id="btn-next">Next</button>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table id="trips-table">
+                <thead>
+                    <tr>
+                        <th>Pickup Time</th>
+                        <th>Pickup Zone</th>
+                        <th>Dropoff Zone</th>
+                        <th>Distance (mi)</th>
+                        <th>Duration (min)</th>
+                        <th>Fare ($)</th>
+                        <th>Tip ($)</th>
+                        <th>Total ($)</th>
+                        <th>Speed (mph)</th>
+                        <th>Passengers</th>
+                    </tr>
+                </thead>
+                <tbody id="trips-body">
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>NYC Taxi Data Explorer | Built with Flask, SQLite, Chart.js & Leaflet</p>
+        <p>Data Source: NYC Taxi & Limousine Commission (TLC) - January 2019</p>
+    </footer>
+
+    <script src="api.js"></script>
+    <script src="charts.js"></script>
+    <script src="map.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
