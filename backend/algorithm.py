@@ -1,86 +1,36 @@
 """
-Custom Sorting Algorithms for NYC Taxi Data Explorer
------------------------------------------------------
-Implements bucket sort and insertion sort without using built-in sort functions.
+Custom Algorithm for NYC Taxi Data Explorer
+--------------------------------------------
+Implements a linear top-k selection without using built-in sort functions.
 
-Used for ordering fare distribution buckets and sorting search results.
+Used in /api/top-expensive to return the k highest-fare trips.
 """
 
 
-def custom_bucket_sort(data, key_func, num_buckets=10):
+def top_k_fares(trips, k=10):
     """
-    Custom Bucket Sort Implementation
-    ----------------------------------
-    Sorts a list of dictionaries by a numeric key using bucket sort.
+    Linear Top-K Selection
+    -----------------------
+    Finds the k most expensive trips by scanning the list once per result slot.
 
     How it works:
-    1. Find the min and max values
-    2. Create 'num_buckets' empty buckets
-    3. Distribute items into buckets based on their value range
-    4. Sort each bucket using insertion sort (also custom, no built-in)
-    5. Concatenate all buckets
+    1. Start with an empty result list
+    2. For each of the k slots, scan all remaining trips and pick the highest fare
+    3. Remove the picked trip so it is not selected again
+    4. Repeat until k trips are collected
 
-    Time Complexity: O(n + k) average case, O(n^2) worst case
-    Space Complexity: O(n + k) where k = number of buckets
-
-
+    Time Complexity:  O(n * k)  — n trips scanned for each of the k slots
+    Space Complexity: O(n + k)  — copy of trips list + result list
     """
-    if not data:
-        return []
-
-    # Find min and max
-    min_val = key_func(data[0])
-    max_val = key_func(data[0])
-    for item in data:
-        val = key_func(item)
-        if val < min_val:
-            min_val = val
-        if val > max_val:
-            max_val = val
-
-    # Edge case: all values are the same
-    if min_val == max_val:
-        return data
-
-    # Create buckets
-    bucket_range = (max_val - min_val + 0.001) / num_buckets
-    buckets = []
-    for i in range(num_buckets):
-        buckets.append([])
-
-    # Distribute into buckets
-    for item in data:
-        val = key_func(item)
-        index = int((val - min_val) / bucket_range)
-        if index >= num_buckets:
-            index = num_buckets - 1
-        buckets[index].append(item)
-
-    # Sort each bucket using insertion sort (custom, no built-in)
-    for bucket in buckets:
-        custom_insertion_sort(bucket, key_func)
-
-    # Concatenate
+    remaining = list(trips)
     result = []
-    for bucket in buckets:
-        for item in bucket:
-            result.append(item)
+
+    for _ in range(min(k, len(remaining))):
+        max_idx = 0
+        for i in range(1, len(remaining)):
+            if remaining[i]["fare_amount"] > remaining[max_idx]["fare_amount"]:
+                max_idx = i
+        result.append(remaining[max_idx])
+        remaining.pop(max_idx)
 
     return result
-
-def custom_insertion_sort(arr, key_func):
-    """
-    Custom Insertion Sort (used inside bucket sort)
-    No built-in sort functions used.
-
-    Time Complexity: O(n^2) worst case, O(n) best case
-    Space Complexity: O(1)
-    """
-    for i in range(1, len(arr)):
-        current = arr[i]
-        current_val = key_func(current)
-        j = i - 1
-        while j >= 0 and key_func(arr[j]) > current_val:
-            arr[j + 1] = arr[j]
-            j -= 1
-        arr[j + 1] = current
