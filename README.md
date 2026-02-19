@@ -34,6 +34,10 @@ Urban_Mobility_Data_Explorer/
 └── README.md
 ```
 
+``` Architecture diagram
+<img width="2600" height="1630" alt="save" src="https://github.com/user-attachments/assets/32cc475f-09db-4f4c-b573-694b9a442440" />
+
+```
 > **Generated files** (not in repo, created after running the pipeline):
 > `backend/nyc_taxi.db`, `backend/cleaning_log.txt`
 
