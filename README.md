@@ -30,7 +30,7 @@ Urban_Mobility_Data_Explorer/
 ├── data/
 │   ├── taxi_zone_lookup.csv          # Zone dimension table (included)
 │   ├── taxi_zones/                   # Shapefile for spatial data (included)
-│   └── yellow_tripdata_2019-01.csv   # Raw trip data (download required)
+│   └── yellow_tripdata_2019-01.parquet   # Raw trip data (download required)
 ├── requirements.txt
 ├── .gitignore
 └── README.md
