@@ -3,7 +3,7 @@
 A fullstack web application that explores urban mobility patterns using the **New York City Taxi Trip dataset** (January 2019). Built with Flask, SQLite, and vanilla JavaScript.
 
 ## Video Walkthrough
-**[Link to Video Walkthrough]** *(Add your video link here)*
+**[Link to Video Walkthrough]** *(https://www.youtube.com/watch?v=pV1qDeYk7YE)*
 
 ---
 
