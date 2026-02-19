@@ -2,19 +2,20 @@
 Flask Backend API for NYC Taxi Data Explorer
 ----------------------------------------------
 Endpoints:
-- GET /api/stats          -> Overall dataset statistics
-- GET /api/trips          -> Paginated trips with filters
-- GET /api/hourly         -> Trip counts & avg fare by hour
-- GET /api/daily          -> Trip counts by day of week
-- GET /api/boroughs       -> Trip stats grouped by borough
-- GET /api/top-zones      -> Top pickup/dropoff zones
-- GET /api/fare-distribution -> Fare amount distribution buckets
-- GET /api/zones/geojson  -> GeoJSON for all taxi zones
-- GET /api/zone-heatmap   -> Pickup counts per zone (for map)
-- GET /api/speed-analysis -> Speed patterns by hour and borough
-- GET /api/payment-analysis -> Payment type breakdown
-- GET /api/weekday-vs-weekend -> Weekday vs weekend comparison
-- GET /api/search         -> Custom bucket search using our custom algorithm
+- GET /api/stats               -> Overall dataset statistics
+- GET /api/trips               -> Paginated trips with filters
+- GET /api/hourly              -> Trip counts & avg fare by hour
+- GET /api/daily               -> Trip counts by day of week
+- GET /api/boroughs            -> Trip stats grouped by borough
+- GET /api/top-zones           -> Top pickup/dropoff zones
+- GET /api/fare-distribution   -> Fare amount distribution buckets
+- GET /api/zones/geojson       -> GeoJSON for all taxi zones
+- GET /api/zone-heatmap        -> Pickup counts per zone (for map)
+- GET /api/speed-analysis      -> Speed patterns by hour and borough
+- GET /api/payment-analysis    -> Payment type breakdown
+- GET /api/weekday-vs-weekend  -> Weekday vs weekend comparison
+- GET /api/search              -> Filter trips by zone name
+- GET /api/top-expensive       -> Top k trips by fare (uses custom algorithm)
 """
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -23,7 +24,7 @@ import os
 import json
 
 from db import get_db
-from algorithm import custom_bucket_sort
+from algorithm import top_k_fares
 
 app = Flask(__name__)
 CORS(app)
@@ -323,10 +324,9 @@ def get_top_zones():
 
 @app.route("/api/fare-distribution", methods=["GET"])
 def get_fare_distribution():
-    """Fare amount distribution using SQL aggregation + custom bucket sort for ordering."""
+    """Fare amount distribution buckets, ordered by fare range."""
     conn = get_db()
 
-    # Aggregate fare buckets directly in SQL (much faster than loading 500K rows)
     rows = conn.execute(
         """SELECT
             CAST(fare_amount / 5 AS INT) * 5 as bucket_start,
@@ -346,13 +346,9 @@ def get_fare_distribution():
             "range": f"${start}-${start + 5}",
             "count": row["count"],
             "avg_fare": round(row["avg_fare"], 2),
-            "order": start,
         })
 
-    # Use our custom bucket sort to order the results (demonstrating the algorithm)
-    sorted_data = custom_bucket_sort(data, lambda x: x["order"], num_buckets=5)
-
-    return jsonify(sorted_data)
+    return jsonify(data)
 
 
 @app.route("/api/zones/geojson", methods=["GET"])
@@ -475,10 +471,27 @@ def search_trips():
 
     data = [dict(r) for r in rows]
 
-    # Sort using our CUSTOM bucket sort (no built-in sort!)
-    sorted_data = custom_bucket_sort(data, lambda x: x[sort_by], num_buckets=15)
+    return jsonify(data)
 
-    return jsonify(sorted_data)
+
+@app.route("/api/top-expensive", methods=["GET"])
+def top_expensive():
+    """Return the k most expensive trips using the custom top-k algorithm."""
+    k = int(request.args.get("k", 10))
+
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT trip_id, fare_amount, trip_distance, trip_duration_minutes,
+               pickup_hour, pickup_location_id, dropoff_location_id
+           FROM trips
+           LIMIT 1000"""
+    ).fetchall()
+    conn.close()
+
+    trips = [dict(r) for r in rows]
+    result = top_k_fares(trips, k=k)
+
+    return jsonify(result)
 
 
 @app.route("/api/payment-analysis", methods=["GET"])
