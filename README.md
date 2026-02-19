@@ -3,7 +3,7 @@
 A fullstack web application for exploring NYC taxi trip patterns across time, borough, zone, and fare — built with Flask, SQLite, and vanilla JavaScript.
 
 ## Video Walkthrough
-**[Link to Video Walkthrough]** *(https://www.youtube.com/watch?v=pV1qDeYk7YE)*
+**[Video Walkthrough](https://www.youtube.com/watch?v=pV1qDeYk7YE)*
 
 
 ---
