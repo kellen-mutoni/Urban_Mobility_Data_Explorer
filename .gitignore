@@ -1,0 +1,12 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated files
+backend/nyc_taxi.db
+backend/cleaning_log.txt
+
+# Large data files (download separately)
+data/*.parquet

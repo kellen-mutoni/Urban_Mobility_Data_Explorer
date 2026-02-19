@@ -10,96 +10,104 @@ A fullstack web application that explores urban mobility patterns using the **Ne
 ## Project Structure
 
 ```
-Urban Mobility Data Explorer/
+Urban_Mobility_Data_Explorer/
 ├── backend/
-│   ├── app.py                  # Flask API server (serves both API and frontend)
-│   ├── data_processing.py      # Data cleaning & feature engineering pipeline
+│   ├── app.py                  # Flask API server
+│   ├── data_processing.py      # Pipeline orchestrator: DB setup, zone & spatial loading
+│   ├── trip_pipeline.py        # Trip data cleaning, feature engineering & DB insertion
+│   ├── algorithm.py            # Custom bucket sort implementation
+│   ├── db.py                   # Database helpers
 │   ├── schema.sql              # SQLite database schema
-│   ├── requirements.txt        # Python dependencies
-│   ├── cleaning_log.txt        # Log of excluded/suspicious records
-│   └── nyc_taxi.db             # SQLite database (generated after processing)
+│   └── requirements.txt        # Python dependencies
 ├── frontend/
 │   ├── index.html              # Dashboard UI
 │   ├── styles.css              # Styling (dark theme, responsive)
-│   └── app.js                  # Frontend logic (charts, map, table)
+│   ├── app.js                  # Frontend entry point
+│   ├── charts.js               # Chart.js visualizations
+│   ├── map.js                  # Leaflet map & heatmap
+│   └── api.js                  # API fetch helpers
 ├── data/
-│   ├── yellow_tripdata_2019-01.csv  # Raw trip data (download required)
-│   ├── taxi_zone_lookup.csv         # Zone dimension table
-│   └── taxi_zones/                  # Shapefile spatial data (extracted from zip)
+│   ├── taxi_zone_lookup.csv         # Zone dimension table (included)
+│   ├── taxi_zones/                  # Shapefile spatial data (included)
+│   └── yellow_tripdata_2019-01.parquet  # Raw trip data (download required, see below)
 ├── .gitignore
 └── README.md
 ```
+
+> **Generated files** (not in repo, created after running the pipeline):
+> `backend/nyc_taxi.db`, `backend/cleaning_log.txt`
 
 ---
 
 ## Setup Instructions
 
 ### Prerequisites
-- **Python 3.10+** installed
-- **pip** package manager
-- **SQLite** (comes pre-installed on most systems)
-- An internet connection (for CDN libraries: Chart.js, Leaflet)
+- **Python 3.10+**
+- **pip**
+- **SQLite** (pre-installed on most systems)
+- Internet connection (for CDN libraries: Chart.js, Leaflet)
 
 ### Step 1: Clone the Repository
 ```bash
 git clone <your-repo-url>
-cd "Urban Mobility Data Explorer"
+cd Urban_Mobility_Data_Explorer
 ```
 
-### Step 2: Download the Dataset
-Download the following files and place them in the `data/` folder:
-1. **yellow_tripdata_2019-01.csv** (Fact Table) - [Download from TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) or use the provided link from the assignment.
-2. **taxi_zone_lookup.csv** (Dimension Table) - Should already be in the project
-3. **taxi_zones.zip** (Spatial Metadata) - Extract into `data/taxi_zones/`
+### Step 2: Download the Trip Dataset
+The taxi zone lookup and shapefiles are already included. You only need to download the large trip data file:
 
-If the taxi_zones.zip hasn't been extracted yet:
 ```bash
-unzip taxi_zones.zip -d data/taxi_zones/
+curl -o data/yellow_tripdata_2019-01.parquet \
+  "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2019-01.parquet"
 ```
 
-### Step 3: Install Python Dependencies
+> The file is ~100MB. It is in Parquet format (faster and smaller than CSV).
+
+### Step 3: Create & Activate a Virtual Environment
+```bash
+python3 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+```
+
+### Step 4: Install Python Dependencies
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-The required packages are:
-- Flask (web framework)
-- Flask-CORS (cross-origin requests)
-- Pandas (data processing)
-- GeoPandas (spatial data handling)
-- Shapely (geometry operations)
+Required packages:
+| Package | Purpose |
+|---------|---------|
+| Flask | Web framework |
+| Flask-CORS | Cross-origin requests |
+| Pandas | Data processing |
+| PyArrow | Parquet file reading |
+| GeoPandas | Spatial data handling |
+| Shapely | Geometry operations |
 
-### Step 4: Run the Data Processing Pipeline
-This cleans the raw data, engineers features, and loads everything into SQLite:
+### Step 5: Run the Data Processing Pipeline
 ```bash
 python3 backend/data_processing.py
 ```
+
 This will:
-- Load and clean 500,000 trip records from the raw CSV
-- Handle missing values, outliers, and anomalies
-- Engineer 6 derived features (duration, speed, fare/mile, etc.)
+- Set up the SQLite database from `schema.sql`
 - Load taxi zone lookup and spatial boundary data
-- Create the SQLite database at `backend/nyc_taxi.db`
-- Generate a cleaning log at `backend/cleaning_log.txt`
+- Read and clean 500,000 trip records from the Parquet file (`trip_pipeline.py`)
+- Engineer 6 derived features (duration, speed, fare/mile, etc.)
+- Write the database to `backend/nyc_taxi.db`
+- Write a cleaning report to `backend/cleaning_log.txt`
 
 **Expected time:** ~1 minute
 
-### Step 5: Start the Application
+### Step 6: Start the Application
 ```bash
 python3 backend/app.py
 ```
 
-### Step 6: Open the Dashboard
-Open your browser and go to:
+### Step 7: Open the Dashboard
 ```
 http://localhost:8080
 ```
-
-The dashboard loads everything from the Flask API. You should see:
-- Summary statistics cards
-- Interactive charts (hourly patterns, borough breakdown, fare distribution, etc.)
-- A zoomable taxi zone heatmap
-- A filterable, paginated trip records table
 
 ---
 
@@ -111,7 +119,7 @@ The dashboard loads everything from the Flask API. You should see:
 | Frontend | HTML, CSS, JavaScript |
 | Charts | Chart.js |
 | Map | Leaflet.js |
-| Data Processing | Pandas, GeoPandas |
+| Data Processing | Pandas, PyArrow, GeoPandas |
 
 ---
 
